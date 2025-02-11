@@ -1,0 +1,80 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+#define N 5 
+#define THINKING 0
+#define HUNGRY 1
+#define EATING 2
+#define LEFT (philosopher_number + 4) % N
+#define RIGHT (philosopher_number + 1) % N
+
+sem_t mutex;            
+sem_t S[N];             
+int state[N];           
+int philosophers[N] = {0, 1, 2, 3, 4}; 
+
+void test(int philosopher_number) {
+    if (state[philosopher_number] == HUNGRY &&
+        state[LEFT] != EATING &&
+        state[RIGHT] != EATING) {
+        
+        state[philosopher_number] = EATING;
+        sleep(1); // Simulating eating time
+        
+        printf("Philosopher %d takes forks %d and %d and starts eating\n",
+               philosopher_number + 1, LEFT + 1, philosopher_number + 1);
+        
+        sem_post(&S[philosopher_number]); // Allow philosopher to eat
+    }
+}
+
+void take_forks(int philosopher_number) {
+    sem_wait(&mutex); // Enter critical section
+    state[philosopher_number] = HUNGRY;
+    printf("Philosopher %d is HUNGRY\n", philosopher_number + 1);
+    test(philosopher_number); // Try to take forks
+    sem_post(&mutex); // Exit critical section
+    sem_wait(&S[philosopher_number]); // Wait if forks are not available
+    sleep(1);
+}
+
+void put_forks(int philosopher_number) {
+    sem_wait(&mutex); // Enter critical section
+    state[philosopher_number] = THINKING;
+    printf("Philosopher %d puts down forks %d and %d and starts THINKING\n",
+           philosopher_number + 1, LEFT + 1, philosopher_number + 1);
+    
+    test(LEFT);  // Check if the left philosopher can eat
+    test(RIGHT); // Check if the right philosopher can eat
+    
+    sem_post(&mutex); // Exit critical section
+}
+
+void* philosopher(void* num) {
+    int* i = num;
+    while (1) {
+        printf("Philosopher %d is THINKING\n", *i + 1);
+        sleep(1); // Simulate thinking time
+        take_forks(*i);
+        sleep(1); // Simulate eating time
+        put_forks(*i);
+    }
+}
+
+int main() {
+    pthread_t thread_id[N];
+
+    sem_init(&mutex, 0, 1); // Initialize mutex
+    for (int i = 0; i < N; i++)
+        sem_init(&S[i], 0, 0); // Initialize semaphores for philosophers
+
+    for (int i = 0; i < N; i++)
+        pthread_create(&thread_id[i], NULL, philosopher, &philosophers[i]);
+
+    for (int i = 0; i < N; i++)
+        pthread_join(thread_id[i], NULL); // Wait for threads to finish (they won't)
+
+    return 0;
+}
